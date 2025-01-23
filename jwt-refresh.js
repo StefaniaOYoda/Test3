@@ -3,10 +3,11 @@ $(document).ready(function () {
 })
 
 function login(user) {
+    var password = prompt('Please enter your password'); // Prompt user for password input
     $.ajax({
         type: 'POST',
-                contentType: "application/json",
-        data: JSON.stringify({user: user, password: "bm5nhSkxCXZkKRy4"})
+        contentType: "application/json",
+        data: JSON.stringify({user: user, password: password})
     }).success(
         function (response) {
             localStorage.setItem('access_token', response['access_token']);
@@ -30,7 +31,7 @@ function newToken() {
             'Authorization': 'Bearer ' + localStorage.getItem('access_token')
         },
         type: 'POST',
-                data: JSON.stringify({refreshToken: localStorage.getItem('refresh_token')})
+        data: JSON.stringify({refreshToken: localStorage.getItem('refresh_token')})
     }).success(
         function () {
             localStorage.setItem('access_token', apiToken);
