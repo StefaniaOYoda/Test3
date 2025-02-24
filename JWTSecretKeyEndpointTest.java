@@ -20,122 +20,95 @@
  * Source for this application is maintained at https://github.com/WebGoat/WebGoat, a repository for free software projects.
  */
 
-package org.owasp.webgoat.lessons.jwt;
+package org.owasp.webgoat.lessons.missingac;
 
-import static io.jsonwebtoken.SignatureAlgorithm.HS512;
-import static org.hamcrest.Matchers.is;
-import static org.owasp.webgoat.lessons.jwt.JWTSecretKeyEndpoint.JWT_SECRET;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.owasp.webgoat.lessons.missingac.MissingFunctionAC.PASSWORD_SALT_ADMIN;
+import static org.owasp.webgoat.lessons.missingac.MissingFunctionAC.PASSWORD_SALT_SIMPLE;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Date;
-import org.hamcrest.CoreMatchers;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.owasp.webgoat.WithWebGoatUser;
-import org.owasp.webgoat.container.plugins.LessonTest;
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.owasp.webgoat.container.CurrentUsername;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.servlet.ModelAndView;
 
-@WithWebGoatUser
-public class JWTSecretKeyEndpointTest extends LessonTest {
+/** Created by jason on 1/5/17. */
+@Controller
+@AllArgsConstructor
+@Slf4j
+public class MissingFunctionACUsers {
 
-  @BeforeEach
-  public void setup() {
-    this.mockMvc = MockMvcBuilders.webAppContextSetup(this.wac).build();
+  private final MissingAccessControlUserRepository userRepository;
+
+  @GetMapping(path = {"access-control/users"})
+  public ModelAndView listUsers() {
+
+    ModelAndView model = new ModelAndView();
+    model.setViewName("list_users");
+    List<User> allUsers = userRepository.findAllUsers();
+    model.addObject("numUsers", allUsers.size());
+    // add display user objects in place of direct users
+    List<DisplayUser> displayUsers = new ArrayList<>();
+    for (User user : allUsers) {
+      displayUsers.add(new DisplayUser(user, PASSWORD_SALT_SIMPLE));
+    }
+    model.addObject("allUsers", displayUsers);
+
+    return model;
   }
 
-  private Claims createClaims(String username) {
-    Claims claims = Jwts.claims();
-    claims.put("admin", "true");
-    claims.put("user", "Tom");
-    claims.setExpiration(Date.from(Instant.now().plus(Duration.ofDays(1))));
-    claims.setIssuedAt(Date.from(Instant.now().plus(Duration.ofDays(1))));
-    claims.setIssuer("iss");
-    claims.setAudience("aud");
-    claims.setSubject("sub");
-    claims.put("username", username);
-    claims.put("Email", "webgoat@webgoat.io");
-    claims.put("Role", new String[] {"user"});
-    return claims;
+  @GetMapping(
+      path = {"access-control/users"},
+      consumes = "application/json")
+  @ResponseBody
+  public ResponseEntity<List<DisplayUser>> usersService() {
+    return ResponseEntity.ok(
+        userRepository.findAllUsers().stream()
+            .map(user -> new DisplayUser(user, PASSWORD_SALT_SIMPLE))
+            .collect(Collectors.toList()));
   }
 
-  @Test
-  public void solveAssignment() throws Exception {
-    Claims claims = createClaims("WebGoat");
-    String token = Jwts.builder().setClaims(claims).signWith(HS512, JWT_SECRET).compact();
-
-    mockMvc
-        .perform(MockMvcRequestBuilders.post("/JWT/secret").param("token", token))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.lessonCompleted", is(true)));
+  @GetMapping(
+      path = {"access-control/users-admin-fix"},
+      consumes = "application/json")
+  @ResponseBody
+  public ResponseEntity<List<DisplayUser>> usersFixed(@CurrentUsername String username) {
+    var currentUser = userRepository.findByUsername(username);
+    if (currentUser != null && currentUser.isAdmin()) {
+      return ResponseEntity.ok(
+          userRepository.findAllUsers().stream()
+              .map(user -> new DisplayUser(user, PASSWORD_SALT_ADMIN))
+              .collect(Collectors.toList()));
+    }
+    return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
   }
 
-  @Test
-  public void solveAssignmentWithLowercase() throws Exception {
-    Claims claims = createClaims("webgoat");
-    String token = Jwts.builder().setClaims(claims).signWith(HS512, JWT_SECRET).compact();
+  @PostMapping(
+      path = {"access-control/users", "access-control/users-admin-fix"},
+      consumes = "application/json",
+      produces = "application/json")
+  @ResponseBody
+  public User addUser(@RequestBody User newUser) {
+    try {
+      userRepository.save(newUser);
+      return newUser;
+    } catch (Exception ex) {
+      log.error("Error creating new User", ex);
+      return null;
+    }
 
-    mockMvc
-        .perform(MockMvcRequestBuilders.post("/JWT/secret").param("token", token))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.lessonCompleted", is(true)));
-  }
+    // @RequestMapping(path = {"user/{username}","/"}, method = RequestMethod.DELETE, consumes =
+    // "application/json", produces = "application/json")
+    // TODO implement delete method with id param and authorization
 
-  @Test
-  public void oneOfClaimIsMissingShouldNotSolveAssignment() throws Exception {
-    Claims claims = createClaims("WebGoat");
-    claims.remove("aud");
-    String token = Jwts.builder().setClaims(claims).signWith(HS512, JWT_SECRET).compact();
-
-    mockMvc
-        .perform(MockMvcRequestBuilders.post("/JWT/secret").param("token", token))
-        .andExpect(status().isOk())
-        .andExpect(
-            jsonPath(
-                "$.feedback", CoreMatchers.is(messages.getMessage("jwt-secret-claims-missing"))));
-  }
-
-  @Test
-  public void incorrectUser() throws Exception {
-    Claims claims = createClaims("Tom");
-    String token = Jwts.builder().setClaims(claims).signWith(HS512, JWT_SECRET).compact();
-
-    mockMvc
-        .perform(MockMvcRequestBuilders.post("/JWT/secret").param("token", token))
-        .andExpect(status().isOk())
-        .andExpect(
-            jsonPath(
-                "$.feedback",
-                CoreMatchers.is(
-                    messages.getMessage("jwt-secret-incorrect-user", "default", "Tom"))));
-  }
-
-  @Test
-  public void incorrectToken() throws Exception {
-    Claims claims = createClaims("Tom");
-    String token = Jwts.builder().setClaims(claims).signWith(HS512, "wrong_password").compact();
-
-    mockMvc
-        .perform(MockMvcRequestBuilders.post("/JWT/secret").param("token", token))
-        .andExpect(status().isOk())
-        .andExpect(
-            jsonPath("$.feedback", CoreMatchers.is(messages.getMessage("jwt-invalid-token"))));
-  }
-
-  @Test
-  void unsignedToken() throws Exception {
-    Claims claims = createClaims("WebGoat");
-    String token = Jwts.builder().setClaims(claims).compact();
-
-    mockMvc
-        .perform(MockMvcRequestBuilders.post("/JWT/secret").param("token", token))
-        .andExpect(status().isOk())
-        .andExpect(
-            jsonPath("$.feedback", CoreMatchers.is(messages.getMessage("jwt-invalid-token"))));
   }
 }
+
