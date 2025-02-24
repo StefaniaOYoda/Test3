@@ -1,26 +1,7 @@
-package org.owasp.webgoat.plugin.introduction;
-import org.owasp.webgoat.assignments.AssignmentEndpoint;
-import org.owasp.webgoat.assignments.AssignmentHints;
-import org.owasp.webgoat.assignments.AssignmentPath;
-import org.owasp.webgoat.assignments.AttackResult;
-import org.owasp.webgoat.session.DatabaseUtilities;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
-
-import javax.servlet.http.HttpServletRequest;
-import java.io.IOException;
-import java.sql.*;
-
-
-/***************************************************************************************************
+/*
+ * This file is part of WebGoat, an Open Web Application Security Project utility. For details, please see http://www.owasp.org/
  *
- *
- * This file is part of WebGoat, an Open Web Application Security Project utility. For details,
- * please see http://www.owasp.org/
- *
- * Copyright (c) 2002 - 20014 Bruce Mayhew
+ * Copyright (c) 2002 - 2019 Bruce Mayhew
  *
  * This program is free software; you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation; either version 2 of the
@@ -36,62 +17,102 @@ import java.sql.*;
  *
  * Getting Source ==============
  *
- * Source for this application is maintained at https://github.com/WebGoat/WebGoat, a repository for free software
- * projects.
- *
- * For details, please see http://webgoat.github.io
- *
- * @author Bruce Mayhew <a href="http://code.google.com/p/webgoat">WebGoat</a>
- * @created October 28, 2003
+ * Source for this application is maintained at https://github.com/WebGoat/WebGoat, a repository for free software projects.
  */
-@AssignmentPath("/SqlInjection/attack5b")
-@AssignmentHints(value = {"SqlStringInjectionHint1", "SqlStringInjectionHint2", "SqlStringInjectionHint3", "SqlStringInjectionHint4"})
-public class SqlInjectionLesson5b extends AssignmentEndpoint {
 
-    @RequestMapping(method = RequestMethod.POST)
-    public
-    @ResponseBody
-    AttackResult completed(@RequestParam String userid, HttpServletRequest request) throws IOException {
-        return injectableQuery(userid);
+package org.owasp.webgoat.lessons.sqlinjection.introduction;
 
-    }
+import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed;
+import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
-    protected AttackResult injectableQuery(String accountName) {
-        try {
-            Connection connection = DatabaseUtilities.getConnection(getWebSession());
-            String query = "SELECT * FROM user_data WHERE userid = " + accountName;
+import java.io.IOException;
+import java.sql.*;
+import org.owasp.webgoat.container.LessonDataSource;
+import org.owasp.webgoat.container.assignments.AssignmentEndpoint;
+import org.owasp.webgoat.container.assignments.AssignmentHints;
+import org.owasp.webgoat.container.assignments.AttackResult;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
 
-            try {
-                Statement statement = connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE,
-                        ResultSet.CONCUR_READ_ONLY);
-                ResultSet results = statement.executeQuery(query);
+@RestController
+@AssignmentHints(
+    value = {
+      "SqlStringInjectionHint5b1",
+      "SqlStringInjectionHint5b2",
+      "SqlStringInjectionHint5b3",
+      "SqlStringInjectionHint5b4"
+    })
+public class SqlInjectionLesson5b implements AssignmentEndpoint {
 
-                if ((results != null) && (results.first() == true)) {
-                    ResultSetMetaData resultsMetaData = results.getMetaData();
-                    StringBuffer output = new StringBuffer();
+  private final LessonDataSource dataSource;
 
-                    output.append(SqlInjectionLesson5a.writeTable(results, resultsMetaData));
-                    results.last();
+  public SqlInjectionLesson5b(LessonDataSource dataSource) {
+    this.dataSource = dataSource;
+  }
 
-                    // If they get back more than one user they succeeded
-                    if (results.getRow() >= 6) {
-                        return trackProgress(success().feedback("sql-injection.5b.success").feedbackArgs(output.toString()).build());
-                    } else {
-                        return trackProgress(failed().output(output.toString()).build());
-                    }
+  @PostMapping("/SqlInjection/assignment5b")
+  @ResponseBody
+  public AttackResult completed(@RequestParam String userid, @RequestParam String login_count)
+      throws IOException {
+    return injectableQuery(login_count, userid);
+  }
 
-                } else {
-                    return trackProgress(failed().feedback("sql-injection.5b.no.results").build());
+  protected AttackResult injectableQuery(String login_count, String accountName) {
+    String queryString = "SELECT * From user_data WHERE Login_Count = ? and userid = ?"; // Parameterized query
+    try (Connection connection = dataSource.getConnection();
+         PreparedStatement query = connection.prepareStatement(
+            queryString, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY)) {
 
-//                    output.append(getLabelManager().get("NoResultsMatched"));
-                }
-            } catch (SQLException sqle) {
+      int count = 0;
+      try {
+        count = Integer.parseInt(login_count);
+      } catch (NumberFormatException e) { // More specific exception
+        return failed(this)
+            .output("Invalid input: '" + login_count + "' is not a valid number.")
+            .build();
+      }
 
-                return trackProgress(failed().output(sqle.getMessage()).build());
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            return trackProgress(failed().output(this.getClass().getName() + " : " + e.getMessage()).build());
+      query.setInt(1, count); // Set parameter 1
+      query.setString(2, accountName); // Set parameter 2
+
+      try {
+        ResultSet results = query.executeQuery();
+
+        if (results != null && results.first()) {
+          ResultSetMetaData resultsMetaData = results.getMetaData();
+          StringBuilder output = new StringBuilder();
+          output.append(SqlInjectionLesson5a.writeTable(results, resultsMetaData));
+          results.last();
+
+          if (results.getRow() >= 6) {
+            return success(this)
+                .feedback("sql-injection.5b.success")
+                .output("Query successful.")
+                .feedbackArgs(output.toString())
+                .build();
+          } else {
+            return failed(this)
+                .output(output.toString() + "\nQuery returned fewer than 6 rows.")
+                .build();
+          }
+        } else {
+          return failed(this)
+              .feedback("sql-injection.5b.no.results")
+              .output("Query returned no results.")
+              .build();
         }
+      } catch (SQLException sqle) {
+        return failed(this)
+            .output("SQL Error: " + sqle.getMessage()) // More concise error message
+            .build();
+      }
+    } catch (Exception e) {
+      return failed(this)
+          .output("An unexpected error occurred: " + e.getMessage()) // More user friendly message
+          .build();
     }
+  }
 }
+
