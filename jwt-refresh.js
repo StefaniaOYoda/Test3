@@ -3,10 +3,12 @@ $(document).ready(function () {
 })
 
 function login(user) {
-    var password = prompt('Please enter your password'); // Dynamically get password from user
+    // Password retrieval mechanism should be implemented here securely.
+    // This example uses a placeholder; DO NOT USE THIS IN PRODUCTION.
+    let password = getPasswordFromSecureSource(user); 
     $.ajax({
         type: 'POST',
-        contentType: "application/json",
+                contentType: "application/json",
         data: JSON.stringify({user: user, password: password})
     }).success(
         function (response) {
@@ -14,6 +16,14 @@ function login(user) {
             localStorage.setItem('refresh_token', response['refresh_token']);
         }
     )
+}
+
+function getPasswordFromSecureSource(user) {
+    // Replace this with your secure password retrieval method
+    //  (e.g., environment variable, secure config service, database lookup)
+    // This is a placeholder and should NOT be used in production code.
+    console.warn("getPasswordFromSecureSource is a placeholder and should be replaced with a secure implementation.");
+    return ""; // Placeholder – replace with actual password retrieval
 }
 
 //Dev comment: Pass token as header as we had an issue with tokens ending up in the access_log
@@ -31,7 +41,7 @@ function newToken() {
             'Authorization': 'Bearer ' + localStorage.getItem('access_token')
         },
         type: 'POST',
-        data: JSON.stringify({refreshToken: localStorage.getItem('refresh_token')})
+                data: JSON.stringify({refreshToken: localStorage.getItem('refresh_token')})
     }).success(
         function () {
             localStorage.setItem('access_token', apiToken);
