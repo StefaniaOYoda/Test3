@@ -3,7 +3,7 @@ $(document).ready(function () {
 })
 
 function login(user) {
-    var password = prompt('Please enter your password'); // Prompt user for password input
+    var password = prompt('Please enter your password'); // Dynamically get password from user
     $.ajax({
         type: 'POST',
         contentType: "application/json",
