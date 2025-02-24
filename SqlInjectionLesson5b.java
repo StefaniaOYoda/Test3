@@ -56,75 +56,61 @@ public class SqlInjectionLesson5b implements AssignmentEndpoint {
   @ResponseBody
   public AttackResult completed(@RequestParam String userid, @RequestParam String login_count)
       throws IOException {
-    if (!isValidNumericInput(login_count)) {
-      return failed(this)
-          .output("Invalid input: login_count must be a numeric value.")
-          .build();
-    }
     return injectableQuery(login_count, userid);
   }
 
-  private boolean isValidNumericInput(String input) {
-    return input.matches("\\d+");
-  }
-
   protected AttackResult injectableQuery(String login_count, String accountName) {
-    String queryString = "SELECT * From user_data WHERE Login_Count = ? and userid= " + accountName;
-    try (Connection connection = dataSource.getConnection()) {
-      PreparedStatement query =
-          connection.prepareStatement(
-              queryString, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+    String queryString = "SELECT * From user_data WHERE Login_Count = ? and userid = ?"; // Parameterized query
+    try (Connection connection = dataSource.getConnection();
+         PreparedStatement query = connection.prepareStatement(
+            queryString, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY)) {
 
-      int count = Integer.parseInt(login_count);
-      query.setInt(1, count);
+      int count = 0;
+      try {
+        count = Integer.parseInt(login_count);
+      } catch (NumberFormatException e) { // More specific exception
+        return failed(this)
+            .output("Invalid input: '" + login_count + "' is not a valid number.")
+            .build();
+      }
+
+      query.setInt(1, count); // Set parameter 1
+      query.setString(2, accountName); // Set parameter 2
 
       try {
         ResultSet results = query.executeQuery();
 
-        if ((results != null) && (results.first() == true)) {
+        if (results != null && results.first()) {
           ResultSetMetaData resultsMetaData = results.getMetaData();
           StringBuilder output = new StringBuilder();
-
           output.append(SqlInjectionLesson5a.writeTable(results, resultsMetaData));
           results.last();
 
-          // If they get back more than one user they succeeded
           if (results.getRow() >= 6) {
             return success(this)
                 .feedback("sql-injection.5b.success")
-                .output("Your query was: " + queryString.replace("?", login_count))
+                .output("Query successful.")
                 .feedbackArgs(output.toString())
                 .build();
           } else {
             return failed(this)
-                .output(
-                    output.toString()
-                        + "<br> Your query was: "
-                        + queryString.replace("?", login_count))
+                .output(output.toString() + "\nQuery returned fewer than 6 rows.")
                 .build();
           }
-
         } else {
           return failed(this)
               .feedback("sql-injection.5b.no.results")
-              .output("Your query was: " + queryString.replace("?", login_count))
+              .output("Query returned no results.")
               .build();
         }
       } catch (SQLException sqle) {
-
         return failed(this)
-            .output(
-                sqle.getMessage() + "<br> Your query was: " + queryString.replace("?", login_count))
+            .output("SQL Error: " + sqle.getMessage()) // More concise error message
             .build();
       }
     } catch (Exception e) {
       return failed(this)
-          .output(
-              this.getClass().getName()
-                  + " : "
-                  + e.getMessage()
-                  + "<br> Your query was: "
-                  + queryString.replace("?", login_count))
+          .output("An unexpected error occurred: " + e.getMessage()) // More user friendly message
           .build();
     }
   }
