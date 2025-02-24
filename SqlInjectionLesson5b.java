@@ -1,30 +1,16 @@
 {
     "Componenti":  [
                        {
-                           "Snippet":  "return injectableQuery(validateLoginCount(login_count), userid);",
+                           "Snippet":  "return injectableQuery(userid);",
                            "Name":  "SqlInjectionLesson5b.java"
                        },
                        {
-                           "Snippet":  "//Validation Function",
+                           "Snippet":  "// Input validation (Example - needs to be tailored to specific needs)\n                           // if (!isValidLoginCount(userid)) { throw new IllegalArgumentException("Invalid userid"); }
+                           ",
                            "Name":  "SqlInjectionLesson5b.java"
                        },
                        {
-                           "Snippet":  "private int validateLoginCount(String loginCount) {
-                                try {
-                                    int count = Integer.parseInt(loginCount);
-                                    if (count > 0) { //Example validation:  Check if it's a positive integer
-                                        return count;
-                                    } else {
-                                        return 0; // Or throw an exception for invalid input
-                                    }
-                                } catch (NumberFormatException e) {
-                                    return 0; // Or throw an exception for invalid input
-                                }
-                            }",
-                           "Name":  "SqlInjectionLesson5b.java"
-                       },
-                       {
-                           "Snippet":  "query.setInt(1, count);",
+                           "Snippet":  "// Parameterized query -  'count' is now handled internally\n                           query.setInt(1, userid);",
                            "Name":  "SqlInjectionLesson5b.java"
                        },
                        {
