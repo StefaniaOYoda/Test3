@@ -85,9 +85,8 @@ public class SqlInjectionLesson6a implements AssignmentEndpoint {
 
   private AttackResult executeSqlInjection(Connection connection, String query, boolean usedUnion) {
     try (Statement statement =
-        connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY)) {
-
-      ResultSet results = statement.executeQuery(query);
+        connection.createStatement(ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+        ResultSet results = statement.executeQuery(query)) {
 
       if (!((results != null) && results.first())) {
         return failed(this)
